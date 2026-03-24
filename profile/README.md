@@ -32,9 +32,10 @@ sudo apt-get install inotify-tools
 서버의 작업 디렉토리는 /home/ubuntu/을 기준으로 합니다.
 ```
 /home/ubuntu/
-├── app.jar       # Spring Boot 실행 파일 (로컬에서 전송됨)
-├── deploy.sh     # 애플리케이션 종료 및 실행 스크립트
-├── watch.sh      # 파일 변경 감지 스크립트
-├── app.log       # 애플리케이션 실행 로그
-└── watch.log     # 감시 프로세스 동작 로그
+├── app.jar
+├── watch_app.sh
+├── app.log
+├── watch_app.log
+├── watch_runner.log
+└── app.pid
 ```
