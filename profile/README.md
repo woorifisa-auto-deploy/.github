@@ -41,9 +41,6 @@ sudo apt-get install inotify-tools
 └── app.pid
 ```
 
-## ⚙️ 환경설정
-
-
 ## 🏗️ 아키텍처
 
 ```bash
