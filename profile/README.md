@@ -231,5 +231,132 @@ while true; do
     fi
 done
 ```
+## 핵심 설계 의도
+
+### 1. 이벤트 기반 감시
+
+한줄 핵심 의도: 파일 시스템 이벤트가 발생할 때만 동작하도록 하여 불필요한 CPU 사용을 줄인다.
+
+```bash
+while true; do
+    CHANGED_FILE=$(inotifywait -e close_write,modify,create,moved_to --format '%f' "$APP_DIR")
+done
+```
+
+### 2. `app.jar` 변경 시에만 재시작
+
+한줄 핵심 의도: 같은 디렉터리의 다른 파일 변경에는 반응하지 않고, `app.jar` 변경에만 재시작하도록 제한한다.
+
+```bash
+if [ "$CHANGED_FILE" = "app.jar" ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] detected change on app.jar" | tee -a "$WATCH_LOG"
+    sleep 1
+    restart_app
+fi
+```
+
+### 3. 정상 종료 우선 시도
+
+한줄 핵심 의도: 기존 프로세스가 내부 리소스를 정리할 수 있도록 먼저 일반 종료 신호를 보낸다.
+
+```bash
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] stopping app pid=$PID" | tee -a "$WATCH_LOG"
+kill "$PID"
+```
+
+### 4. 강제 종료 fallback
+
+한줄 핵심 의도: 정상 종료가 일정 시간 안에 되지 않으면 강제로 종료하여 재시작이 막히지 않도록 한다.
+
+```bash
+for i in {1..20}; do
+    if ps -p "$PID" > /dev/null 2>&1; then
+        sleep 1
+    else
+        break
+    fi
+done
+
+if ps -p "$PID" > /dev/null 2>&1; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] force killing app pid=$PID" | tee -a "$WATCH_LOG"
+    kill -9 "$PID"
+fi
+```
+
+### 5. 프로세스 완전 종료 확인
+
+한줄 핵심 의도: 종료 명령만 보내고 끝내지 않고, 이전 프로세스가 실제로 완전히 사라질 때까지 기다린다.
+
+```bash
+while ps -p "$PID" > /dev/null 2>&1; do
+    sleep 1
+done
+```
+
+### 6. 7072 포트 해제 확인
+
+한줄 핵심 의도: 새 프로세스가 시작될 때 포트 충돌이 발생하지 않도록 기존 포트가 완전히 해제된 뒤에만 실행한다.
+
+```bash
+wait_for_port_release() {
+    while ss -ltnp 2>/dev/null | grep -q ":$PORT "; do
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] waiting for port $PORT to be released..." | tee -a "$WATCH_LOG"
+        sleep 1
+    done
+}
+```
+
+```bash
+restart_app() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] restarting app" | tee -a "$WATCH_LOG"
+    stop_app
+    wait_for_port_release
+    sleep 1
+    start_app
+}
+```
+
+### 7. 디렉터리 기반 업로드 감지
+
+한줄 핵심 의도: MobaXterm/SCP의 rename·move 방식 업로드까지 감지할 수 있도록 파일이 아닌 디렉터리를 감시한다.
+
+```bash
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] watching directory: $APP_DIR" | tee -a "$WATCH_LOG"
+
+while true; do
+    CHANGED_FILE=$(inotifywait -e close_write,modify,create,moved_to --format '%f' "$APP_DIR")
+
+    if [ "$CHANGED_FILE" = "app.jar" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] detected change on app.jar" | tee -a "$WATCH_LOG"
+        sleep 1
+        restart_app
+    fi
+done
+```
+
+### 8. PID 파일 기반 프로세스 관리
+
+한줄 핵심 의도: 실행한 정확한 Java 프로세스의 PID를 기록하고 그 PID를 기준으로 종료·재시작을 수행한다.
+
+```bash
+nohup java -jar "$APP_JAR" >> "$LOG_FILE" 2>&1 &
+APP_PID=$!
+echo "$APP_PID" > "$PID_FILE"
+```
+
+```bash
+if [ -f "$PID_FILE" ]; then
+    PID=$(cat "$PID_FILE")
+```
+
+```bash
+if ! pgrep -f "java -jar $APP_JAR" > /dev/null 2>&1; then
+    start_app
+else
+    RUNNING_PID=$(pgrep -f "java -jar $APP_JAR" | head -n 1)
+    echo "$RUNNING_PID" > "$PID_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] app already running pid=$RUNNING_PID" | tee -a "$WATCH_LOG"
+fi
+```
 
 
