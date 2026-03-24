@@ -46,22 +46,33 @@ sudo apt-get install inotify-tools
 
 ## 🏗️ 아키텍처
 
-```text
-[Windows Host]
-   │
-   │  (MobaXterm로 app.jar 업로드)
-   ▼
-[Ubuntu Server : /home/ubuntu/app.jar]
-   │
-   │  inotifywait 가 디렉터리 변경 감지
-   ▼
-[watch_app.sh]
-   │
-   ├── 기존 app.jar 프로세스 종료
-   ├── 7072 포트 해제 대기
-   └── 수정된 app.jar 재실행
-   ▼
-[Spring Boot App Running on Port 7072]
+```bash
++--------------------------------------------------+
+|                 Windows Host                     |
++--------------------------------------------------+
+| 1) Gradle Build                                  |
+|    ./gradlew clean bootJar                       |
+|                                                  |
+| 2) JAR 생성                                      |
+|    build/libs/app.jar                            |
+|                                                  |
+| 3) SCP 전송 (MobaXterm)                          |
+|    scp build/libs/app.jar                        |
+|        ubuntu@SERVER_IP:/home/ubuntu/app.jar     |
++-------------------------+------------------------+
+                          |
+                          v
++--------------------------------------------------+
+|                 Ubuntu Server                    |
++--------------------------------------------------+
+| /home/ubuntu/watch_app.sh                        |
+|                                                  |
+| - inotifywait 로 /home/ubuntu 감시               |
+| - app.jar 변경 감지                              |
+| - 기존 app.jar 프로세스 종료                     |
+| - Port 7072 해제 대기                            |
+| - 새 app.jar 재실행                              |
++--------------------------------------------------+
 ```
 
 ## 🧾 구현 세부 사항
