@@ -66,7 +66,7 @@ sudo apt-get install inotify-tools
 
 ## 🧾 구현 세부 사항
 
-```
+```bash
 #!/bin/bash
 
 APP_DIR="/home/ubuntu"
