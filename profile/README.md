@@ -77,6 +77,10 @@ sudo apt-get install inotify-tools
 
 ## 🧾 구현 세부 사항
 
+```
+watch_app.sh
+```
+
 ```bash
 #!/bin/bash
 
