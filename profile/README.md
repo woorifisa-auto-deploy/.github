@@ -30,6 +30,7 @@ sudo apt-get install inotify-tools
 
 ## 📁 디렉토리 구조
 서버의 작업 디렉토리는 /home/ubuntu/을 기준으로 합니다.
+
 ```
 /home/ubuntu/
 ├── app.jar
@@ -44,6 +45,7 @@ sudo apt-get install inotify-tools
 
 
 ## 🏗️ 아키텍처
+
 ```text
 [Windows Host]
    │
@@ -61,7 +63,9 @@ sudo apt-get install inotify-tools
    ▼
 [Spring Boot App Running on Port 7072]
 ```
+
 ## 🧾 구현 세부 사항
+
 ```
 #!/bin/bash
 
