@@ -80,6 +80,9 @@ sudo apt-get install inotify-tools
 ```bash
 #!/bin/bash
 
+# ==========================================
+# 기본 경로 및 파일 설정
+# ==========================================
 APP_DIR="/home/ubuntu"
 APP_JAR="$APP_DIR/app.jar"
 LOG_FILE="$APP_DIR/app.log"
@@ -87,6 +90,13 @@ PID_FILE="$APP_DIR/app.pid"
 WATCH_LOG="$APP_DIR/watch_app.log"
 PORT=7072
 
+# ==========================================
+# 애플리케이션 시작
+# - app.jar를 백그라운드에서 실행
+# - 실행 PID를 app.pid 파일에 저장
+# - 실행 로그는 app.log에 누적
+# - 동작 로그는 watch_app.log에 기록
+# ==========================================
 start_app() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] starting app" | tee -a "$WATCH_LOG"
 
@@ -97,6 +107,14 @@ start_app() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] started app pid=$APP_PID" | tee -a "$WATCH_LOG"
 }
 
+# ==========================================
+# 애플리케이션 종료
+# - PID 파일이 있으면 해당 PID를 읽어서 종료
+# - 먼저 정상 종료 시도
+# - 일정 시간 내 종료되지 않으면 강제 종료
+# - 종료 후 PID 파일 삭제
+# - PID 파일이 없더라도 실행 중인 app.jar 프로세스를 찾아 종료 시도
+# ==========================================
 stop_app() {
     if [ -f "$PID_FILE" ]; then
         PID=$(cat "$PID_FILE")
@@ -105,6 +123,7 @@ stop_app() {
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] stopping app pid=$PID" | tee -a "$WATCH_LOG"
             kill "$PID"
 
+            # 정상 종료 대기 (최대 20초)
             for i in {1..20}; do
                 if ps -p "$PID" > /dev/null 2>&1; then
                     sleep 1
@@ -113,11 +132,13 @@ stop_app() {
                 fi
             done
 
+            # 종료되지 않으면 강제 종료
             if ps -p "$PID" > /dev/null 2>&1; then
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] force killing app pid=$PID" | tee -a "$WATCH_LOG"
                 kill -9 "$PID"
             fi
 
+            # 프로세스가 완전히 사라질 때까지 대기
             while ps -p "$PID" > /dev/null 2>&1; do
                 sleep 1
             done
@@ -138,6 +159,12 @@ stop_app() {
     fi
 }
 
+# ==========================================
+# 포트 해제 대기
+# - 기존 애플리케이션이 사용하던 7072 포트가
+#   완전히 해제될 때까지 대기
+# - 포트 충돌 방지를 위한 단계
+# ==========================================
 wait_for_port_release() {
     while ss -ltnp 2>/dev/null | grep -q ":$PORT "; do
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] waiting for port $PORT to be released..." | tee -a "$WATCH_LOG"
@@ -145,6 +172,12 @@ wait_for_port_release() {
     done
 }
 
+# ==========================================
+# 애플리케이션 재시작
+# - 기존 앱 종료
+# - 포트 해제 대기
+# - 잠시 대기 후 새 app.jar 실행
+# ==========================================
 restart_app() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] restarting app" | tee -a "$WATCH_LOG"
     stop_app
@@ -153,11 +186,20 @@ restart_app() {
     start_app
 }
 
+# ==========================================
+# app.jar 존재 여부 확인
+# - 파일이 없으면 에러 로그를 남기고 종료
+# ==========================================
 if [ ! -f "$APP_JAR" ]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $APP_JAR not found" | tee -a "$WATCH_LOG"
     exit 1
 fi
 
+# ==========================================
+# 초기 실행 상태 확인
+# - 이미 app.jar가 실행 중이면 해당 PID를 기록
+# - 실행 중이 아니면 새로 시작
+# ==========================================
 if ! pgrep -f "java -jar $APP_JAR" > /dev/null 2>&1; then
     start_app
 else
@@ -166,8 +208,18 @@ else
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] app already running pid=$RUNNING_PID" | tee -a "$WATCH_LOG"
 fi
 
+# ==========================================
+# 디렉토리 감시 시작 로그
+# - /home/ubuntu 디렉토리를 감시 대상으로 설정
+# ==========================================
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] watching directory: $APP_DIR" | tee -a "$WATCH_LOG"
 
+# ==========================================
+# app.jar 변경 감지
+# - inotifywait 로 /home/ubuntu 디렉토리를 실시간 감시
+# - close_write, modify, create, moved_to 이벤트 감지
+# - 변경된 파일명이 app.jar 인 경우에만 재시작 수행
+# ==========================================
 while true; do
     CHANGED_FILE=$(inotifywait -e close_write,modify,create,moved_to --format '%f' "$APP_DIR")
 
